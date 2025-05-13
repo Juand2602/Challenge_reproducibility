@@ -1,0 +1,352 @@
+import numpy as np
+import gymnasium as gym
+import concurrent.futures # Para paralelización simple (más relevante para Algoritmo 2)
+import time
+
+# --- Funciones Auxiliares ---
+
+def compute_ranks(x):
+    """
+    Devuelve los rangos de x (el valor más pequeño obtiene el rango 0).
+    """
+    assert x.ndim == 1
+    ranks = np.empty(len(x), dtype=int)
+    ranks[x.argsort()] = np.arange(len(x))
+    return ranks
+
+def compute_centered_ranks(x):
+    """
+    Calcula rangos y los escala a [-0.5, 0.5].
+    """
+    y = compute_ranks(x.ravel()).reshape(x.shape).astype(np.float32)
+    y /= (x.size - 1)
+    y -= .5
+    return y
+
+def get_flattened_parameters(policy_network):
+    """
+    Placeholder: Obtiene los parámetros de la red neuronal como un vector 1D.
+    Deberás implementar esto según tu biblioteca (PyTorch/TensorFlow).
+    Ejemplo (simplificado):
+    params = []
+    for param in policy_network.parameters():
+        params.append(param.data.cpu().numpy().flatten())
+    return np.concatenate(params)
+    """
+    # --- IMPLEMENTACIÓN REQUERIDA ---
+    # Ejemplo con una red ficticia simple para demostración
+    if hasattr(policy_network, '_mock_params'):
+      return policy_network._mock_params
+    else:
+      # Simula parámetros si no existen (para pruebas iniciales)
+      # Necesitarás el tamaño real de los parámetros de tu red
+      print("Advertencia: Usando parámetros simulados. Implementa get_flattened_parameters.")
+      # Asume un tamaño arbitrario si no se puede determinar
+      param_size = getattr(policy_network, 'param_size', 100) # Puedes establecer 'param_size' en tu red
+      policy_network._mock_params = np.random.randn(param_size) * 0.1
+      return policy_network._mock_params
+
+
+def set_flattened_parameters(policy_network, flat_params):
+    """
+    Placeholder: Establece los parámetros de la red neuronal desde un vector 1D.
+    Deberás implementar esto según tu biblioteca (PyTorch/TensorFlow).
+    Ejemplo (simplificado):
+    offset = 0
+    for param in policy_network.parameters():
+        param_shape = param.shape
+        param_size = np.prod(param_shape)
+        param_data = flat_params[offset : offset + param_size].reshape(param_shape)
+        param.data = torch.from_numpy(param_data).to(param.device) # O equivalente en TF
+        offset += param_size
+    """
+    # --- IMPLEMENTACIÓN REQUERIDA ---
+    # Ejemplo con una red ficticia simple para demostración
+    policy_network._mock_params = flat_params.copy()
+    # print(f"Debug: Parámetros establecidos (norma): {np.linalg.norm(flat_params)}")
+
+
+# --- Clase del Agente ES ---
+
+class EvolutionStrategyAgent:
+    def __init__(self, policy_network, env_name,
+                 learning_rate=0.01,
+                 noise_std_dev=0.1,
+                 population_size=50,
+                 weight_decay_coeff=0.005,
+                 fitness_shaping=True,
+                 seed=42):
+        """
+        Inicializa el agente de Estrategias Evolutivas.
+
+        Args:
+            policy_network: La red neuronal que representa la política.
+                            Debe tener métodos para obtener/establecer parámetros aplanados.
+            env_name (str): Nombre del entorno de Gymnasium a utilizar.
+            learning_rate (float): Tasa de aprendizaje (alpha).
+            noise_std_dev (float): Desviación estándar del ruido Gaussiano (sigma).
+            population_size (int): Tamaño de la población (n). Debe ser par para antithetic sampling.
+            weight_decay_coeff (float): Coeficiente de decaimiento de pesos (lambda).
+            fitness_shaping (bool): Si se aplica fitness shaping (transformación de rango).
+            seed (int): Semilla aleatoria para reproducibilidad.
+        """
+        self.policy_network = policy_network
+        self.env_name = env_name
+        self.learning_rate = learning_rate
+        self.noise_std_dev = noise_std_dev
+        self.population_size = population_size
+        self.weight_decay_coeff = weight_decay_coeff
+        self.use_fitness_shaping = fitness_shaping
+        self.seed = seed
+
+        # Asegurar que el tamaño de la población sea par para antithetic sampling
+        if self.population_size % 2 != 0:
+            print(f"Advertencia: population_size ({self.population_size}) no es par. Incrementando a {self.population_size + 1}.")
+            self.population_size += 1
+
+        self.num_params = len(get_flattened_parameters(self.policy_network))
+        print(f"Número de parámetros en la política: {self.num_params}")
+
+        # Generador de números aleatorios para las perturbaciones
+        self.rng = np.random.default_rng(seed)
+
+    def _evaluate_fitness(self, parameters):
+        """
+        Evalúa el fitness (retorno) de un conjunto de parámetros dado en el entorno.
+
+        Args:
+            parameters (np.ndarray): Vector de parámetros aplanados para evaluar.
+
+        Returns:
+            float: Retorno total obtenido en un episodio.
+        """
+        # Crea una instancia del entorno para esta evaluación
+        # Nota: Para paralelización real, cada worker tendría su propio entorno.
+        eval_env = gym.make(self.env_name)
+        set_flattened_parameters(self.policy_network, parameters) # Carga los parámetros en la red
+
+        observation, info = eval_env.reset()
+        total_reward = 0.0
+        terminated = False
+        truncated = False
+
+        while not terminated and not truncated:
+            # --- OBTENER ACCIÓN DE LA RED ---
+            # Placeholder: Necesitas obtener la acción de tu red neuronal.
+            # Ejemplo (simplificado para acción aleatoria o red ficticia):
+            if hasattr(self.policy_network, 'get_action'):
+                 action = self.policy_network.get_action(observation)
+            else:
+                 # Si no hay método get_action, usa acción aleatoria (¡IMPLEMENTAR!)
+                 # print("Advertencia: Usando acción aleatoria. Implementa get_action en tu red.")
+                 action = eval_env.action_space.sample()
+            # --------------------------------
+
+            observation, reward, terminated, truncated, info = eval_env.step(action)
+            total_reward += reward
+
+        eval_env.close()
+        # print(f"Debug: Fitness evaluado: {total_reward}")
+        return total_reward
+
+    def evaluate_population(self):
+        """
+        Genera perturbaciones, evalúa la población (usando antithetic sampling)
+        y devuelve los fitness y las perturbaciones.
+
+        Returns:
+            tuple: (all_fitnesses, all_perturbations)
+                   - all_fitnesses (np.ndarray): Array con los fitness de cada individuo.
+                   - all_perturbations (np.ndarray): Array con las perturbaciones epsilon usadas.
+        """
+        current_params = get_flattened_parameters(self.policy_network)
+        all_fitnesses = np.zeros(self.population_size)
+        all_perturbations = np.zeros((self.population_size, self.num_params))
+
+        # Genera n/2 perturbaciones epsilon
+        num_base_perturbations = self.population_size // 2
+        base_perturbations = self.rng.standard_normal((num_base_perturbations, self.num_params))
+
+        eval_indices = list(range(self.population_size))
+
+        # Evalúa en paralelo (simple ejemplo con ThreadPoolExecutor)
+        # Para una paralelización más robusta (Algoritmo 2), usarías multiprocessing
+        # y una estrategia de semillas compartidas más explícita.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.population_size) as executor:
+            futures = {}
+            for i in range(num_base_perturbations):
+                epsilon = base_perturbations[i]
+
+                # Perturbación positiva
+                idx_pos = 2 * i
+                params_pos = current_params + self.noise_std_dev * epsilon
+                futures[executor.submit(self._evaluate_fitness, params_pos)] = (idx_pos, epsilon)
+                all_perturbations[idx_pos, :] = epsilon # Guarda epsilon
+
+                # Perturbación negativa (antithetic)
+                idx_neg = 2 * i + 1
+                params_neg = current_params - self.noise_std_dev * epsilon
+                futures[executor.submit(self._evaluate_fitness, params_neg)] = (idx_neg, -epsilon)
+                all_perturbations[idx_neg, :] = -epsilon # Guarda -epsilon
+
+            for future in concurrent.futures.as_completed(futures):
+                idx, _ = futures[future]
+                try:
+                    fitness = future.result()
+                    all_fitnesses[idx] = fitness
+                except Exception as exc:
+                    print(f'Evaluación generó una excepción: {exc}')
+                    all_fitnesses[idx] = -np.inf # Penalizar fallos
+
+        return all_fitnesses, all_perturbations
+
+    def update_policy(self, all_fitnesses, all_perturbations):
+        """
+        Calcula la actualización de los parámetros usando los fitness y perturbaciones,
+        aplicando opcionalmente fitness shaping y weight decay.
+        """
+        if self.use_fitness_shaping:
+            # Aplica fitness shaping (transformación a rangos centrados)
+            shaped_fitnesses = compute_centered_ranks(all_fitnesses)
+        else:
+            # Usa los fitness crudos (normalizados opcionalmente)
+            # shaped_fitnesses = (all_fitnesses - np.mean(all_fitnesses)) / (np.std(all_fitnesses) + 1e-8)
+            shaped_fitnesses = all_fitnesses # Sin normalizar por ahora
+
+        # Calcula el gradiente estimado ponderado por los fitness (formulación del paper)
+        # Suma(F_i * epsilon_i)
+        weighted_sum_perturbations = np.dot(shaped_fitnesses, all_perturbations)
+
+        # Gradiente estimado de ES
+        # g = (1 / (n * sigma)) * Suma(F_i * epsilon_i)
+        es_gradient_estimate = (1 / (self.population_size * self.noise_std_dev)) * weighted_sum_perturbations
+
+        # Obtiene parámetros actuales
+        current_params = get_flattened_parameters(self.policy_network)
+
+        # Calcula la actualización
+        # update = alpha * g - alpha * lambda * theta (Weight Decay)
+        update_step = self.learning_rate * es_gradient_estimate
+        weight_decay_term = self.learning_rate * self.weight_decay_coeff * current_params
+
+        # Aplica la actualización
+        new_params = current_params + update_step - weight_decay_term
+
+        # Establece los nuevos parámetros en la red
+        set_flattened_parameters(self.policy_network, new_params)
+
+    def train(self, num_generations, print_every=10):
+        """
+        Bucle principal de entrenamiento del agente ES.
+        """
+        start_time = time.time()
+        for generation in range(num_generations):
+            # 1. Evaluar la población
+            all_fitnesses, all_perturbations = self.evaluate_population()
+
+            # 2. Actualizar la política
+            self.update_policy(all_fitnesses, all_perturbations)
+
+            # 3. Registrar y mostrar progreso
+            if (generation + 1) % print_every == 0:
+                mean_fitness = np.mean(all_fitnesses)
+                std_fitness = np.std(all_fitnesses)
+                max_fitness = np.max(all_fitnesses)
+                elapsed_time = time.time() - start_time
+                print(f"Generación: {generation + 1}/{num_generations}, "
+                      f"Fitness (Mean±Std): {mean_fitness:.2f}±{std_fitness:.2f}, "
+                      f"Max Fitness: {max_fitness:.2f}, "
+                      f"Tiempo: {elapsed_time:.1f}s")
+                start_time = time.time() # Reinicia timer
+
+        print("Entrenamiento completado.")
+
+
+# --- Ejemplo de Uso ---
+
+if __name__ == "__main__":
+    # 1. Definir la red de política (Placeholder)
+    #    Necesitas definir tu red usando PyTorch/TensorFlow
+    class MockPolicyNetwork:
+        """Red neuronal ficticia para demostración."""
+        def __init__(self, obs_dim, act_dim, param_size=128):
+            self.obs_dim = obs_dim
+            self.act_dim = act_dim
+            self.param_size = param_size # Tamaño total de parámetros simulados
+            # Simula parámetros iniciales
+            self._mock_params = np.random.randn(param_size) * 0.1
+
+        def get_action(self, observation):
+            # Placeholder: Lógica para obtener acción basada en la observación
+            # y los parámetros actuales (_mock_params).
+            # ¡¡¡ DEBES IMPLEMENTAR ESTO CON TU RED REAL !!!
+            # Ejemplo: acción aleatoria basada en el espacio de acción
+            # (Necesita acceso al espacio de acción del entorno)
+            # return env.action_space.sample() # No se puede acceder a 'env' aquí directamente
+
+            # Ejemplo simplísimo: acción constante o basada en suma ponderada simple
+            # Esto NO aprenderá bien, es solo para que el código corra.
+            if self.act_dim == 1: # Asume acción continua simple
+                 # Mapeo lineal simple de observación y parte de los pesos
+                 relevant_params = self._mock_params[:self.obs_dim]
+                 action_value = np.dot(observation, relevant_params)
+                 # Limitar la acción si es necesario (depende del entorno)
+                 return np.array([np.tanh(action_value) * 2]) # Ejemplo para Pendulum
+            else: # Asume acción discreta
+                 # Mapeo lineal simple
+                 num_outputs = self.act_dim
+                 relevant_params = self._mock_params[:self.obs_dim * num_outputs].reshape(self.obs_dim, num_outputs)
+                 logits = np.dot(observation, relevant_params)
+                 return np.argmax(logits) # Acción determinista
+
+
+    # 2. Configurar el entorno
+    ENV_NAME = "Pendulum-v1" # Entorno de prueba simple con acción continua
+    # ENV_NAME = "CartPole-v1" # Entorno de prueba simple con acción discreta
+    temp_env = gym.make(ENV_NAME)
+    obs_space_shape = temp_env.observation_space.shape
+    # Determinar obs_dim (puede ser tupla para imágenes)
+    obs_dim = np.prod(obs_space_shape) if obs_space_shape else 1 # Asume 1D si no hay shape
+
+    # Determinar act_dim y si es discreto o continuo
+    if isinstance(temp_env.action_space, gym.spaces.Discrete):
+        act_dim = temp_env.action_space.n
+        is_continuous = False
+    elif isinstance(temp_env.action_space, gym.spaces.Box):
+        act_dim = temp_env.action_space.shape[0]
+        is_continuous = True
+    else:
+        raise NotImplementedError("Espacio de acción no soportado")
+    temp_env.close()
+
+    print(f"Entorno: {ENV_NAME}")
+    print(f"Dimensión Observación: {obs_dim}")
+    print(f"Dimensión Acción: {act_dim} ({'Continua' if is_continuous else 'Discreta'})")
+
+
+    # 3. Crear la instancia de la red (¡Usa tu implementación real!)
+    #    Ajusta param_size si usas la red ficticia para que coincida con tu estimación
+    policy_net = MockPolicyNetwork(obs_dim=obs_dim, act_dim=act_dim, param_size=512) # Ajusta param_size
+
+    # 4. Crear el agente ES
+    agent = EvolutionStrategyAgent(
+        policy_network=policy_net,
+        env_name=ENV_NAME,
+        learning_rate=0.05,       # Ajustar según el entorno
+        noise_std_dev=0.1,        # Ajustar según el entorno
+        population_size=64,       # Probar diferentes tamaños
+        weight_decay_coeff=0.01,
+        fitness_shaping=True,
+        seed=123
+    )
+
+    # 5. Entrenar al agente
+    NUM_GENERATIONS = 100 # Ajustar según sea necesario
+    agent.train(num_generations=NUM_GENERATIONS, print_every=5)
+
+    # (Opcional) Evaluar la política final entrenada
+    print("\nEvaluando política final...")
+    final_params = get_flattened_parameters(agent.policy_network)
+    final_reward = agent._evaluate_fitness(final_params)
+    print(f"Recompensa final obtenida: {final_reward:.2f}")
+
