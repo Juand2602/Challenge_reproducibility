@@ -57,11 +57,11 @@ Este proyecto incluye las siguientes implementaciones principales:
     * `Swimmer-v4`
     * `Walker2d-v4`
 * **Atari (con ES en PyTorch):**
-    * `ALE/Pong-v5` (incluyendo el experimento de invarianza a frame-skip)
+    * `ALE/Pong-v5`
 * **MuJoCo (con PPO):**
     * `InvertedPendulum-v4`
-    * `Swimmer-v4` (y otros según se documente en el informe)
-
+    * `Swimmer-v4`
+    * `HalfCheetah-v4`
 
 
 
