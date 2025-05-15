@@ -1,0 +1,11 @@
+# Ignorar entorno virtual
+venv310/
+
+# Archivos Python compilados
+__pycache__/
+
+# Archivos de entorno/editor
+.env
+*.env
+.vscode/
+*.swp
