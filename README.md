@@ -59,11 +59,14 @@ Este proyecto incluye las siguientes implementaciones principales:
 * **Atari (con ES en PyTorch):**
     * `ALE/Pong-v5`
 * **MuJoCo (con PPO):**
-    * `InvertedPendulum-v4`
-    * `Swimmer-v4`
+    ** `InvertedPendulum-v4`
     * `HalfCheetah-v4`
+    * `Hopper-v4`
+    * `Swimmer-v4`
+    * `Walker2d-v4`
+## Enlace al video
 
-
+[![Challenge de Reproducibilidad]](https://youtu.be/S54cFXPm528)
 
 
 
