@@ -66,7 +66,7 @@ Este proyecto incluye las siguientes implementaciones principales:
     * `Walker2d-v4`
 ## Enlace al video
 
-[![Challenge de Reproducibilidad]](https://youtu.be/S54cFXPm528)
+[[Challenge de Reproducibilidad]](https://youtu.be/S54cFXPm528)
 
 
 
