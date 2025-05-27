@@ -3,7 +3,6 @@ import numpy as np
 import imageio
 import matplotlib.pyplot as plt
 import os
-import multiprocessing as mp
 import mlflow
 import mlflow.sklearn
 from mlflow.tracking import MlflowClient
@@ -80,8 +79,8 @@ def evolution_strategy(env_name='HalfCheetah-v4', pop_size=200, sigma=0.1, alpha
         noise = [[np.random.randn(*p.shape) for p in params] for _ in range(pop_size)]
         args_list = [(env_name, params, eps, sigma) for eps in noise]
 
-        with mp.Pool(processes=mp.cpu_count()) as pool:
-            rewards = pool.map(evaluate_candidate, args_list)
+        # Sin multiprocessing, evaluación secuencial
+        rewards = [evaluate_candidate(args) for args in args_list]
 
         rewards = np.array(rewards)
         A = (rewards - np.mean(rewards)) / (np.std(rewards) + 1e-8)
@@ -148,7 +147,6 @@ def plot_rewards(rewards):
 # Main
 
 if __name__ == "__main__":
-    mp.set_start_method("spawn", force=True)
     mlflow.set_experiment("ES_Swimmer")
 
     configs = [
@@ -164,7 +162,7 @@ if __name__ == "__main__":
                 pop_size=config["pop_size"],
                 sigma=config["sigma"],
                 alpha=config["alpha"],
-                iterations=100
+                iterations=10
             )
 
             mlflow.sklearn.log_model(policy, "model", registered_model_name="ES_Swimmer_Model")
