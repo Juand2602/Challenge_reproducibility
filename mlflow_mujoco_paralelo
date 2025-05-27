@@ -101,16 +101,16 @@ def evolution_strategy(env_name='HalfCheetah-v4', pop_size=200, sigma=0.1, alpha
     plot_rewards(reward_history)
     record_video(env_name, policy)
 
-    mlflow.log_artifact("results/paramsSwimmer-v4Para.npy")
-    mlflow.log_artifact("results/rewardsSwimmer-v4Para.npy")
-    mlflow.log_artifact("Swimmer-v4Para.png")
-    mlflow.log_artifact("C:/Users/Usuario/Downloads/Swimmer-v4Para.mp4")
+    mlflow.log_artifact("/home/hadoop/MLFLOW_taller/results/paramsSwimmer-v4Para.npy")
+    mlflow.log_artifact("/home/hadoop/MLFLOW_taller/results/rewardsSwimmer-v4Para.npy")
+    mlflow.log_artifact("/home/hadoop/MLFLOW_taller/Swimmer-v4Para.png")
+    mlflow.log_artifact("/home/hadoop/MLFLOW_taller/Swimmer-v4Para.mp4")
 
     return policy, reward_history
 
 # Guardar video
 
-def record_video(env_name, policy, video_path="C:\\Users\\Usuario\\Downloads\\Swimmer-v4Para.mp4"):
+def record_video(env_name, policy, video_path="/home/hadoop/MLFLOW_taller/Swimmer-v4Para.mp4"):
     env = gym.make(env_name, render_mode="rgb_array")
     obs, _ = env.reset()
     frames = []
@@ -127,7 +127,7 @@ def record_video(env_name, policy, video_path="C:\\Users\\Usuario\\Downloads\\Sw
 
 # Guardar resultados
 
-def save_results(policy, rewards, path="results"):
+def save_results(policy, rewards, path="/home/hadoop/MLFLOW_taller/results"):
     os.makedirs(path, exist_ok=True)
     np.save(os.path.join(path, "paramsSwimmer-v4Para.npy"), policy.get_params())
     np.save(os.path.join(path, "rewardsSwimmer-v4Para.npy"), rewards)
@@ -142,7 +142,7 @@ def plot_rewards(rewards):
     plt.title("Entrenamiento ES en MuJoCo")
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("Swimmer-v4Para.png")
+    plt.savefig("/home/hadoop/MLFLOW_taller/Swimmer-v4Para.png")
     plt.show()
 
 # Main
